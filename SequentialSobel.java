@@ -1,55 +1,44 @@
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import javax.imageio.ImageIO;
 
 public class SequentialSobel {
-    
-    // Sobel operator kernels
-    private static final int[][] SOBEL_X = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
-    private static final int[][] SOBEL_Y = {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
-    
-    public static BufferedImage applySobel(BufferedImage inputImage) {
-        int width = inputImage.getWidth();
-        int height = inputImage.getHeight();
-        BufferedImage outputImage = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
-        
-        // Process each pixel (excluding 1-pixel border)
+    public static void main(String[] args) throws IOException {
+        BufferedImage input = ImageIO.read(new File("input.jpg"));
+        BufferedImage output = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+
+        long start = System.nanoTime();
+        applySobel(input, output);
+        long end = System.nanoTime();
+
+        System.out.printf("Sequential Time: %.2f ms%n", (end - start) / 1e6);
+
+        ImageIO.write(output, "jpg", new File("output_sequential.jpg"));
+    }
+
+    public static void applySobel(BufferedImage input, BufferedImage output) {
+        int width = input.getWidth();
+        int height = input.getHeight();
+        int[] gx = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
+        int[] gy = {-1, -2, -1, 0, 0, 0, 1, 2, 1};
+
         for (int y = 1; y < height - 1; y++) {
             for (int x = 1; x < width - 1; x++) {
-                
-                // Initialize gradients
-                int gx = 0;
-                int gy = 0;
-                
-                // Apply Sobel kernels
-                for (int ky = -1; ky <= 1; ky++) {
-                    for (int kx = -1; kx <= 1; kx++) {
-                        int pixel = inputImage.getRGB(x + kx, y + ky) & 0xFF;
-                        gx += pixel * SOBEL_X[ky + 1][kx + 1];
-                        gy += pixel * SOBEL_Y[ky + 1][kx + 1];
+                int pixelX = 0, pixelY = 0;
+                for (int j = -1; j <= 1; j++) {
+                    for (int i = -1; i <= 1; i++) {
+                        int rgb = input.getRGB(x + i, y + j);
+                        int gray = (rgb >> 16) & 0xff;
+                        int idx = (j + 1) * 3 + (i + 1);
+                        pixelX += gray * gx[idx];
+                        pixelY += gray * gy[idx];
                     }
                 }
-                
-                // Calculate magnitude and clamp to 0-255
-                int magnitude = (int) Math.sqrt(gx * gx + gy * gy);
-                magnitude = Math.min(255, Math.max(0, magnitude));
-                
-                // Set output pixel
-                int edgePixel = (0xFF << 24) | (magnitude << 16) | (magnitude << 8) | magnitude;
-                outputImage.setRGB(x, y, edgePixel);
+                int magnitude = Math.min(255, (int) Math.hypot(pixelX, pixelY));
+                int edgeColor = (magnitude << 16) | (magnitude << 8) | magnitude;
+                output.setRGB(x, y, edgeColor);
             }
         }
-        
-        return outputImage;
-    }
-    
-    public static void main(String[] args) throws Exception {
-        if (args.length != 2) {
-            System.out.println("Usage: SequentialSobel <inputImage> <outputImage>");
-            return;
-        }
-        
-        BufferedImage inputImage = ImageUtils.loadImage(args[0]);
-        BufferedImage grayscaleImage = ImageUtils.convertToGrayscale(inputImage);
-        BufferedImage edgeImage = applySobel(grayscaleImage);
-        ImageUtils.saveImage(edgeImage, args[1]);
     }
 }
